@@ -1,0 +1,282 @@
+esphome:
+  name: "tank-level-sensor"
+  platform: ESP32
+  board: esp32dev
+
+substitutions:
+  devicename: "tank-level-sensor"
+
+# Buzzer Declare
+output:
+  - platform: ledc
+    pin: GPIO22
+    id: rttl_output
+
+binary_sensor:
+# Tank Low Sensor
+  - platform: gpio
+    name: "tank_low"
+    id: tank_low
+    pin:
+      number: 18
+      inverted: False
+    filters:
+      - delayed_on: 2000ms
+
+# Tank Half Sensor
+  - platform: gpio
+    name: "tank_half"
+    id: tank_half
+    pin:
+      number: 19
+      inverted: False
+    filters:
+      - delayed_on: 2000ms
+    #on_press:
+      #then:
+      #- switch.turn_on: led_2
+
+# Tank Full Sensor
+  - platform: gpio
+    name: "tank_full"
+    id: tank_full
+    pin:
+      number: 21
+      inverted: False
+    filters:
+      - delayed_on: 2000ms
+
+# Dry Run Sensor
+  - platform: gpio
+    name: "motor-dryrun"
+    pin:
+      number: 5
+    
+      inverted: true
+
+# Motor Reset Button
+  - platform: gpio
+    pin:
+     number: 15
+     mode: INPUT_PULLUP
+     inverted: true
+    name: "Motor Button"
+    internal: true
+   
+    filters:
+     delayed_on_off: 50 ms
+
+    on_multi_click:
+    
+    - timing:
+        - ON for at least 1s
+        - OFF for at least 1s
+      then:
+      - text_sensor.template.publish:
+            id: motor_button
+            state: "Hold"
+      -  delay: 2 s
+      - text_sensor.template.publish:
+            id: motor_button
+            state: "Released"
+       
+    - timing:
+        - ON for at most 0.5s
+        - OFF for at least 1s
+      then:
+        - text_sensor.template.publish:
+            id: motor_button
+            state: "Clicked"
+        -  delay: 2 s
+        - text_sensor.template.publish:
+            id: motor_button
+            state: "Released"
+    - timing:
+        - ON for at most 0.5s
+        - OFF for at most 0.5s
+        - ON for at most 0.5s
+        - OFF for at least 1s
+      then:
+      - text_sensor.template.publish:
+            id: motor_button
+            state: "Double Clicked"
+      -  delay: 2 s
+      - text_sensor.template.publish:
+            id: motor_button
+            state: "Released"     
+    - timing:
+        - ON for at most 0.5s
+        - OFF for at most 0.5s
+        - ON for at most 0.5s
+        - OFF for at most 0.5s
+        - ON for at most 0.5s
+        - OFF for at least 1s
+      then:
+       - text_sensor.template.publish:
+            id: motor_button
+            state: "Tripple Clicked"
+       -  delay: 2 s
+       - text_sensor.template.publish:
+            id: motor_button
+            state: "Released"
+        
+    - timing:
+        - ON for at most 0.5s
+        - OFF for at most 0.5s
+        - ON for at most 0.5s
+        - OFF for at most 0.5s
+        - ON for at most 0.5s
+        - OFF for at most 0.5s
+        - ON for at most 0.5s
+        - OFF for at least 1s
+      then:
+         - text_sensor.template.publish:
+            id: motor_button
+            state: "Fourth Clicked"
+         -  delay: 2 s
+         - text_sensor.template.publish:
+            id: motor_button
+            state: "Released"
+
+
+# LED Light
+
+switch:
+  - platform: gpio
+    name: "Tank Full"
+    id: led_1
+    pin: 14  
+
+  - platform: gpio
+    name: "Tank Half"
+    id: led_2
+    pin: 12
+
+  - platform: gpio
+    name: "Motor On"
+    id: led_3
+    pin: 13
+
+  - platform: gpio
+    name: "Fault"
+    id: led_4
+    pin: 27
+
+  - platform: gpio
+    name: "Tank Low"
+    id: led_5
+    pin: 26
+
+# Buzzer
+
+  #- platform: output 
+    #name: 'buzzer'
+    #id: buzzer
+    #output: buzzer_output
+    #on_turn_on: 
+      #then:
+        #- output.turn_on: buzzer_output
+        #- output.ledc.set_frequency:
+            #id: buzzer_output
+            #frequency: "1000Hz"
+        #- output.set_level:
+            #id: buzzer_output
+            #level: "50%"
+
+    #on_turn_off:
+      #then:
+        #- output.turn_off: buzzer_output
+
+
+
+sensor:
+
+# Temperature Humidity
+
+  - platform: dht
+    pin: GPIO33
+    model: dht11
+    temperature:
+      name: "workarea temperature"
+      filters:
+        - offset: -4.5
+    humidity:
+      name: "workarea humidity"
+      filters:
+        - offset: 22.8
+    update_interval: 10s
+
+# Gas
+
+  - platform: adc
+    pin: GPIO32
+    name: "Workarea Gas"
+    update_interval: 2s
+    filters:
+      - multiply: 1
+    unit_of_measurement: "ppm" 
+
+#WiFi Sensor    
+
+  - platform: wifi_signal
+    name: " Tank Controller WiFi"
+    update_interval: 60s
+
+text_sensor:
+  - platform: template
+    name: Motor Button
+    id: motor_button
+    lambda: |-
+      return {"Released"};
+
+ 
+
+
+# Restart
+
+button:
+  - platform: restart
+    name: "Device Restart"
+
+# Enable logging
+logger:
+  level: ERROR
+
+# Enable Home Assistant API
+api:
+
+# Expose RTTL Play Option
+  services:
+    - service: play_rtttl
+      variables:
+        song_str: string
+      then:
+        - rtttl.play:
+            rtttl: !lambda 'return song_str;'
+
+rtttl:
+  output: rttl_output
+  on_finished_playback:
+    - logger.log: 'Song ended!'
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: "SmarTiFi"
+  password: "E1F01C3AEE"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "tank_level_sensor"
+    password: "Jixo@2020"
+
+captive_portal:
+
+web_server:
+  port: 80
+
+ 
+
+
+
